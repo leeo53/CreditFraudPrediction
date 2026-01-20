@@ -1,96 +1,149 @@
 import numpy as np
 import random as rand
+import numba
 
-n_trees = 100
-max_depth = 10
-min_samples_split = 10
-trees = []
-bootstrap = True
 
-class Node:
-    def __init__(self,feature_index, threshold, children, prediction = None):
-        if not children:
-            self.is_leaf = True
-            self.prediction = prediction
+class RandomForest:
+    class Node:
+        def __init__(self,feature_index, threshold, children, prediction = None):
+            if prediction is not None:
+                self.is_leaf = True
+                self.prediction = prediction
+            else:
+                self.is_leaf = False
+                self.left = children[0]
+                self.right = children[1]
+                self.feature_index = feature_index
+                self.threshold = threshold
+
+    def __init__(self,X,y, n_trees, max_depth, min_samples_split):
+        self.n_trees = n_trees
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.trees = []
+        self.X=X
+        self.y=y
+        self.numFeatures = X.shape[1]
+        self.numSamples = X.shape[0]
+        self.numClasses = np.unique(y).size
+
+    # Train Forest on dataset
+    # For each tree
+    #   take a sample of X and y
+    #   build a decision tree using the chosen features
+    #   store the tree in trees
+    def fit(self):
+        self.trees = []
+        for i in range(self.n_trees):
+            n_samples = self.numSamples
+            sample_indices = np.random.choice(n_samples,n_samples,replace=True)
+            #sample_X = X[sample_indices]
+            #sample_y = y[sample_indices]
+            print(f"Tree number: {i}")
+            self.trees.append(self._build_tree(sample_indices))
+
+    # Make predictions using the trained forest
+    # Output: 1D array of predicted class labels (majority vote across trees)
+    # For each tree, get its prediction for X.
+    # Aggregate the results (majority vote)
+    def predict(self,X_input):
+        predictions = []
+        for tree in self.trees:
+            predictions.append(self._predict_tree(tree, X_input))
+        predictions = np.array(predictions)
+        final_predictions = []
+        for i in range(X_input.shape[0]):
+            sample_predictions = predictions[:,i]
+            values, counts = np.unique(sample_predictions, return_counts=True)
+            final_predictions.append(values[np.argmax(counts)])
+        return np.array(final_predictions)
+
+    # Recursively build a single decision tree
+    # Output: Node containing tree
+    # If stopping criteria are met return leaf node with prediction
+    # Else:
+    #   Split X and y into left and right subsets
+    #   recursively call on left and right subsets
+    #   return a node storing split infor and child nodes.
+    def _build_tree(self, indices, depth=0):
+        if depth <= 3:
+            print(f"Depth {depth}, #samples={len(indices)}")
+        all_features = np.arange(self.numFeatures)
+        max_features = int(np.sqrt(all_features.size))
+        feature_index, threshold = self._best_split(indices,rand.sample(all_features.tolist(),max_features))
+        counts = get_class_counts(self.y, indices, self.numClasses)
+        length = np.count_nonzero(counts)
+        if length == 1 or feature_index is None or len(indices) < self.min_samples_split or depth >= self.max_depth:
+            tree = self.Node(None, None, None, prediction=np.argmax(counts))
         else:
-            self.is_leaf = False
-            self.left = children[0]
-            self.right = children[1]
-            self.feature_index = feature_index
-            self.threshold = threshold
+            left_indices, right_indices = self.split_indices(indices, feature_index, threshold)
+            children = [self._build_tree(left_indices, depth + 1),
+                        self._build_tree(right_indices, depth + 1)]
+            tree = self.Node(feature_index, threshold, children)
+        return tree
 
+    # Find the best feature and threshold to split the current node
+    # For each feature, try possible thresholds
+    # Evaluate split using Gini impurity metric (method assumes y is binary and classed as 0 and 1)
+    # return the split that minimizes impurity
+    def _best_split(self, indices, features):
+        best_impurity = float('inf')
+        feature_index = -1
+        best_threshold = 0
+        total_samples = len(indices)
+        for feature in features:
+            unique_vals = np.unique(self.X[indices, feature])
+            max_thresholds = 50
+            if len(unique_vals) > max_thresholds:
+                unique_vals = np.random.choice(unique_vals, size=max_thresholds, replace=False)
+            thresholds = (unique_vals[:-1] + unique_vals[1:]) / 2
+            for threshold in thresholds:
+                left_indices, right_indices = self.split_indices(indices,feature, threshold)
+                if len(left_indices) == 0 or len(right_indices) == 0:
+                    continue  # skip this threshold entirely
+                else:
+                    gini_impurity = (len(left_indices) / total_samples) * self._gini(left_indices) + (len(right_indices) / total_samples) * self._gini(right_indices)
+                    if gini_impurity < best_impurity:
+                        best_impurity = gini_impurity
+                        best_threshold = threshold
+                        feature_index = feature
+        if feature_index == -1:
+            return None, None
+        return feature_index, best_threshold
 
-def fit(X,y):
-    for i in range(n_trees):
-        n_samples = X.shape[0]
-        sample_indices = np.random.choice(n_samples,n_samples,replace=True)
-        sample_X = X[sample_indices]
-        sample_y = y[sample_indices]
-        trees.append(_build_tree(sample_X,sample_y))
+    # Make predictions for a single tree
+    # Traverse the tree from root to leaf for each sample
+    # At leaf node, return prediction value or class label
+    def _predict_tree(self, tree, X_input):
+        predictions = []
+        for sample in X_input:
+            temp_node = tree
+            while not temp_node.is_leaf:
+                if sample[temp_node.feature_index] <= temp_node.threshold:
+                    temp_node = temp_node.left
+                else :
+                    temp_node = temp_node.right
+            predictions.append(temp_node.prediction)
+        return predictions
 
-def predict(X):
-    predictions = []
-    for tree in trees:
-        predictions.append(_predict_tree(tree,X))
-    predictions = np.array(predictions)
-    final_predictions = []
-    for i in range(X.shape[0]):
-        sample_predictions = predictions[:,i]
-        values, counts = np.unique(sample_predictions, return_counts=True)
-        final_predictions.append(values[np.argmax(counts)])
-    return np.array(final_predictions)
+    def _gini(self, indices):
+        counts = get_class_counts(self.y, indices, self.numClasses)
+        probabilities = counts / counts.sum()
+        return 1 - np.sum(probabilities ** 2)
 
-def _build_tree(X, y, depth=0):
-    all_features = np.arange(X.shape[1])
-    max_features = int(np.sqrt(all_features.size))
-    feature_index, threshold = _best_split(X,y,rand.sample(all_features.tolist(),max_features))
-    if len(np.unique(y)) == 1 or feature_index is None or len(y) < min_samples_split or depth >= max_depth:
-        values, counts = np.unique(y, return_counts=True)
-        tree = Node(None, None, None, prediction=values[np.argmax(counts)])
-    else:
-        left_mask = X[:, feature_index] <= threshold
-        right_mask = X[:, feature_index] > threshold
-        children = [_build_tree(X[left_mask], y[left_mask], depth + 1),
-                    _build_tree(X[right_mask], y[right_mask], depth + 1)]
-        tree = Node(feature_index, threshold, children)
-    return tree
+    def split_indices(self, indices, feature_index, threshold):
+        left = []
+        right = []
+        for i in indices:
+            if self.X[i, feature_index] <= threshold:
+                left.append(i)
+            else:
+                right.append(i)
+        return left, right
 
-def _best_split(X, y, features):
-    best_impurity = float('inf')
-    feature_index = -1
-    best_threshold = 0
-    for feature in features:
-        unique_vals = np.unique(X[:, feature])
-        thresholds = np.linspace(unique_vals.min(), unique_vals.max(), num=20)
-        for threshold in thresholds:
-            left_mask = X[:, feature] <= threshold
-            right_mask = X[:, feature] > threshold
-            if left_mask.sum() == 0 or right_mask.sum() == 0:
-                continue  # skip this threshold entirely
-            y_left = y[left_mask]
-            y_right = y[right_mask]
-            if y_left.size > 0 and y_right.size > 0:
-                counts_l = np.array([np.sum(y_left),y_left.size-np.sum(y_left)])
-                counts_r = np.array([np.sum(y_right),y_right.size-np.sum(y_right)])
-                gini_impurity_left = 1 - np.sum((counts_l / y_left.size) ** 2)
-                gini_impurity_right = 1 - np.sum((counts_r / y_right.size) ** 2)
-                gini_impurity = (y_left.size / y.size) * gini_impurity_left + (y_right.size / y.size) * gini_impurity_right
-                if gini_impurity < best_impurity:
-                    best_impurity = gini_impurity
-                    best_threshold = threshold
-                    feature_index = feature
-    if feature_index == -1:
-        return None, None
-    return feature_index, best_threshold
-
-def _predict_tree(tree,X):
-    predictions = []
-    for sample in X:
-        temp_node = tree
-        while not temp_node.is_leaf:
-            if sample[temp_node.feature_index] <= temp_node.threshold:
-                temp_node = temp_node.left
-            else :
-                temp_node = temp_node.right
-        predictions.append(temp_node.prediction)
-    return predictions
+@numba.njit
+def get_class_counts(y,indices,num_classes):
+    counts = np.zeros(num_classes, dtype=np.int32)
+    for i in indices:
+        counts[y[i]] += 1
+    return counts
