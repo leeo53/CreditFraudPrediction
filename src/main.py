@@ -2,8 +2,11 @@ import pandas as pd
 import random_forest
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 import numpy as np
+import pickle
+
+train = False
 
 datapath = Path(__file__).parent.parent / "data"
 df = pd.read_csv(datapath / 'creditcard.csv')
@@ -35,7 +38,15 @@ y_train_sub = y_train_sub.astype(np.int8)
 y_test = y_test.astype(np.int8)
 
 rf_model = random_forest.RandomForest(X_train_sub, y_train_sub, 50, 10, 10)
-rf_model.fit()
+if train:
+    rf_model.fit(4)
+    # Save to a file
+    with open("rf_model.pkl", "wb") as f:
+        pickle.dump(rf_model, f)
+else:
+    with open("rf_model.pkl", "rb") as f:
+        rf_model = pickle.load(f)
 y_pred = rf_model.predict(X_test)
+
 
 print(classification_report(y_test, y_pred, digits=4))

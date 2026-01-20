@@ -1,7 +1,13 @@
 import numpy as np
 import random as rand
 import numba
+from multiprocessing import Pool
 
+def build_tree_helper(args):
+    rf_instance, seed = args
+    np.random.seed(seed)  # ensure reproducibility
+    sample_indices = np.random.choice(rf_instance.numSamples, rf_instance.numSamples, replace=True)
+    return rf_instance._build_tree(sample_indices)
 
 class RandomForest:
     class Node:
@@ -32,15 +38,18 @@ class RandomForest:
     #   take a sample of X and y
     #   build a decision tree using the chosen features
     #   store the tree in trees
-    def fit(self):
+    def fit(self, num_cores=1):
         self.trees = []
-        for i in range(self.n_trees):
-            n_samples = self.numSamples
-            sample_indices = np.random.choice(n_samples,n_samples,replace=True)
-            #sample_X = X[sample_indices]
-            #sample_y = y[sample_indices]
-            print(f"Tree number: {i}")
-            self.trees.append(self._build_tree(sample_indices))
+        if num_cores == 1:
+            for i in range(self.n_trees):
+                sample_indices = np.random.choice(self.numSamples,self.numSamples,replace=True)
+                self.trees.append(self._build_tree(sample_indices))
+        else:
+            with Pool(num_cores) as pool:
+                # pass self along with unique seeds for reproducibility
+                args = [(self, i) for i in range(self.n_trees)]
+                self.trees = pool.map(build_tree_helper, args)
+
 
     # Make predictions using the trained forest
     # Output: 1D array of predicted class labels (majority vote across trees)
@@ -54,8 +63,12 @@ class RandomForest:
         final_predictions = []
         for i in range(X_input.shape[0]):
             sample_predictions = predictions[:,i]
-            values, counts = np.unique(sample_predictions, return_counts=True)
-            final_predictions.append(values[np.argmax(counts)])
+            counts = np.bincount(sample_predictions, minlength=self.numClasses)
+            fraud_votes = counts[1]
+            if fraud_votes / self.n_trees > .52:
+                final_predictions.append(1)
+            else:
+                final_predictions.append(0)
         return np.array(final_predictions)
 
     # Recursively build a single decision tree
@@ -66,8 +79,6 @@ class RandomForest:
     #   recursively call on left and right subsets
     #   return a node storing split infor and child nodes.
     def _build_tree(self, indices, depth=0):
-        if depth <= 3:
-            print(f"Depth {depth}, #samples={len(indices)}")
         all_features = np.arange(self.numFeatures)
         max_features = int(np.sqrt(all_features.size))
         feature_index, threshold = self._best_split(indices,rand.sample(all_features.tolist(),max_features))
@@ -84,7 +95,7 @@ class RandomForest:
 
     # Find the best feature and threshold to split the current node
     # For each feature, try possible thresholds
-    # Evaluate split using Gini impurity metric (method assumes y is binary and classed as 0 and 1)
+    # Evaluate split using Gini impurity metric
     # return the split that minimizes impurity
     def _best_split(self, indices, features):
         best_impurity = float('inf')
