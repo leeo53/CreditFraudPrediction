@@ -67,7 +67,7 @@ best_f1 = 0
 best_thresh = 0
 for t in thresholds:
     y_pred = (probabilities > t).astype(int)
-    f1 = f1_score(y_test, y_pred_gb)
+    f1 = f1_score(y_test, y_pred)
     if f1 > best_f1:
         best_f1 = f1
         best_thresh = t
