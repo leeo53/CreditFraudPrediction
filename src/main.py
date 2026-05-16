@@ -7,8 +7,8 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score
 import numpy as np
 import pickle
 
-train_random_forest = True
-train_gradient_boosting = True
+train_random_forest = False
+train_gradient_boosting = False
 
 datapath = Path(__file__).parent.parent / "data"
 df = pd.read_csv(datapath / 'creditcard.csv')
@@ -38,45 +38,54 @@ X_train_sub = X_train_sub.astype(np.float32)
 X_test = X_test.astype(np.float32)
 y_train_sub = y_train_sub.astype(np.int8)
 y_test = y_test.astype(np.int8)
-def main():
-    rf_model = random_forest.RandomForest(X_train_sub, y_train_sub, 50, 10, 10)
-    gb_model = gradient_boosting.GradientBoosting(X_train_sub, y_train_sub, 100, 0.1, 5)
-    if train_random_forest:
-        rf_model.fit(4)
-        # Save to a file
-        with open("rf_model.pkl", "wb") as f:
-            pickle.dump(rf_model, f)
-    else:
-        with open("rf_model.pkl", "rb") as f:
-            rf_model = pickle.load(f)
 
-    if train_gradient_boosting:
-        gb_model.fit()
-        with open("gb_model.pkl", "wb") as f:
-            pickle.dump(gb_model, f)
-    else:
-        with open("gb_model.pkl", "rb") as f:
-            gb_model = pickle.load(f)
+indices = np.arange(X_train_sub.shape[0])
+np.random.shuffle(indices)
+X_train_sub = X_train_sub[indices]
+y_train_sub = y_train_sub[indices]
 
-    y_pred_rf = rf_model.predict(X_test)
+indices = np.arange(X_test.shape[0])
+np.random.shuffle(indices)
+X_test = X_test[indices]
+y_test = y_test[indices]
 
-    y_pred_gb, probabilities = gb_model.predict(X_test)
-    print(probabilities)
-    thresholds = np.linspace(0, 1, 101)
-    best_f1 = 0
-    best_thresh = 0
-    for t in thresholds:
-        y_pred = (probabilities > t).astype(int)
-        f1 = f1_score(y_test, y_pred)
-        if f1 > best_f1:
-            best_f1 = f1
-            best_thresh = t
+rf_model = random_forest.RandomForest(X_train_sub, y_train_sub, 50, 10, 10)
+gb_model = gradient_boosting.GradientBoosting(X_train_sub, y_train_sub, 100, 0.1, 5,20)
+if train_random_forest:
+    rf_model.fit(4)
+    # Save to a file
+    with open("rf_model.pkl", "wb") as f:
+        pickle.dump(rf_model, f)
+else:
+    with open("rf_model.pkl", "rb") as f:
+        rf_model = pickle.load(f)
 
-    print("Best threshold:", best_thresh, "F1:", best_f1)
-    print("Random Forest:")
-    print(classification_report(y_test, y_pred_rf, digits=4))
-    print("Gradient Boosting:")
-    print(classification_report(y_test, y_pred_gb, digits=4))
+if train_gradient_boosting:
+    gb_model.fit()
+    with open("gb_model.pkl", "wb") as f:
+        pickle.dump(gb_model, f)
+else:
+    with open("gb_model.pkl", "rb") as f:
+        gb_model = pickle.load(f)
 
-if __name__ == "__main__":
-    main()
+y_pred_rf = rf_model.predict(X_test)
+
+y_pred_gb, probabilities = gb_model.predict(X_test)
+print(probabilities)
+thresholds = np.linspace(0, 1, 101)
+best_f1 = 0
+best_thresh = 0
+for t in thresholds:
+    y_pred = (probabilities > t).astype(int)
+    f1 = f1_score(y_test, y_pred)
+    if f1 > best_f1:
+        best_f1 = f1
+        best_thresh = t
+
+y_pred_gb_best = (probabilities > best_thresh).astype(int)
+
+print("Best threshold:", best_thresh, "F1:", best_f1)
+print("Random Forest:")
+print(classification_report(y_test, y_pred_rf, digits=4))
+print("Gradient Boosting:")
+print(classification_report(y_test, y_pred_gb_best, digits=4))

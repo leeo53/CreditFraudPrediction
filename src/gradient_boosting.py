@@ -15,7 +15,7 @@ class GradientBoosting:
                 self.feature_index = feature_index
                 self.threshold = threshold
 
-    def __init__(self,X,y,n_estimators, learning_rate, max_depth):
+    def __init__(self,X,y,n_estimators, learning_rate, max_depth, min_samples):
         self.X = X
         self.y = y
         eps = 1e-15
@@ -24,6 +24,8 @@ class GradientBoosting:
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
         self.max_depth = max_depth
+        self.min_samples = min_samples
+        self.lmbda = 1
         self.trees = []
 
     def fit(self):
@@ -59,9 +61,11 @@ class GradientBoosting:
 
     def _build_tree(self, indices, residuals, depth=0):
         feature_index, threshold = self._best_split(indices, residuals)
-        if depth == self.max_depth or feature_index is None:
+        if depth == self.max_depth or feature_index is None or len(indices) < self.min_samples:
             p = self._get_probs(indices)
-            prediction = _get_pred(self.y,indices, p)
+            #prediction = _get_pred(self.y,indices, p, self.lmbda)
+            prediction = np.mean(self.y[indices] - p)
+            #print(prediction)
             tree = self.Node(None, None, None, prediction = prediction)
         else:
             left_indices, right_indices = self._split_indices(indices, feature_index, threshold)
@@ -120,26 +124,28 @@ class GradientBoosting:
         return np.array(left), np.array(right)
 
 @numba.njit
-def _get_pred(y, indices, probs):
+def _get_pred(y, indices, probs, lmbda):
     numerator = 0
     denominator = 0
     eps = 1e-10
-    for i in indices:
-        numerator += y[i] - probs[i]
-        denominator += probs[i]*(1 - probs[i]) + eps
-    return numerator / denominator
+    for idx, i in enumerate(indices):
+        numerator += y[i] - probs[idx]
+        denominator += probs[idx]*(1 - probs[idx])
+    return numerator / (denominator + lmbda)
 
 @numba.njit
 def _get_gain(y, left_indices, right_indices, probs_l, probs_r):
     gradients_l = 0
     hessians_l = 0
     eps = 1e-10
-    for i in left_indices:
-        gradients_l += y[i] - probs_l[i]
-        hessians_l += probs_l[i]*(1 - probs_l[i]) + eps
+    for idx, i in enumerate(left_indices):
+        gradients_l += y[i] - probs_l[idx]
+        hessians_l += probs_l[idx]*(1 - probs_l[idx])
+    hessians_l += eps
     gradients_r = 0
     hessians_r = 0
-    for i in right_indices:
-        gradients_r += y[i] - probs_r[i]
-        hessians_r += probs_r[i]*(1 - probs_r[i]) + eps
+    for idx, i in enumerate(right_indices):
+        gradients_r += y[i] - probs_r[idx]
+        hessians_r += probs_r[idx]*(1 - probs_r[idx])
+    hessians_r += eps
     return (gradients_l ** 2 / hessians_l) + (gradients_r ** 2 / hessians_r) - ((gradients_l + gradients_r) ** 2 / (hessians_l + hessians_r))
