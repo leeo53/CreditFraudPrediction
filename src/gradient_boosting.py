@@ -28,6 +28,8 @@ class GradientBoosting:
         self.lmbda = 1
         self.trees = []
 
+    #builds n_estimators trees each based on the residuals of the last tree.
+    #after each tree is constructed the model is adjusted based on the built trees predictions.
     def fit(self):
         all_indices = np.arange(self.X.shape[0])
         self.trees = []
@@ -37,6 +39,9 @@ class GradientBoosting:
             self.trees.append(tree)
             self.model = self.model + self.learning_rate * self._predict_tree(tree, self.X)
             
+    #we start out with the log odds of the mean of the training data and walk through the trees in order computing
+    #the corrections each tree predicts and applying it to the output F_O. sigmoid turns F_0 from log odds into probabilities.
+    #returned probabilities can be used for threshold tuning.
     def predict(self,X_input):
         eps = 1e-15  # small constant to avoid log(0)
         y_mean = np.clip(np.mean(self.y), eps, 1 - eps)
@@ -47,6 +52,7 @@ class GradientBoosting:
         y_pred = (probabilities > 0.5).astype(int)
         return y_pred, probabilities
 
+    #walk through a single tree finding the correction it predicts for each sample
     def _predict_tree(self, tree, X_input):
         predictions = np.zeros(X_input.shape[0])
         for idx, sample in enumerate(X_input):
@@ -59,6 +65,9 @@ class GradientBoosting:
             predictions[idx] = temp_node.prediction
         return predictions
 
+    #uses the feature index and threshold found using _best_split to create the branching decisions recursively.
+    #if we are at the max_depth or the number of indices is too small to split we create a leaf and store the mean
+    #prediction at those indices.
     def _build_tree(self, indices, residuals, depth=0):
         feature_index, threshold = self._best_split(indices, residuals)
         if depth == self.max_depth or feature_index is None or len(indices) < self.min_samples:
@@ -74,6 +83,7 @@ class GradientBoosting:
             tree = self.Node(feature_index, threshold, children)
         return tree
 
+    #finds the best feature_index and threshold that maximizes the gain
     def _best_split(self, indices, residuals):
         best_gain = -np.inf
         feature_index = -1
@@ -102,6 +112,7 @@ class GradientBoosting:
             return None, None
         return feature_index, best_threshold
 
+    #numerically stable version of sigmoid
     def _sigmoid(self, x):
         out = np.zeros_like(x, dtype=np.float64)
         mask = x >= 0
@@ -109,6 +120,7 @@ class GradientBoosting:
         out[~mask] = np.exp(x[~mask]) / (1 + np.exp(x[~mask]))
         return out
 
+    #helper for getting the probabilities easily
     def _get_probs(self, indices):
         probs = self._sigmoid(self.model[indices])
         return probs
