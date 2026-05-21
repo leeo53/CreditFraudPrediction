@@ -132,3 +132,15 @@ train_gradient_boosting = True
 ```
 
 Otherwise the program will load the saved `.pkl` model files instead of retraining.
+
+# What I learned
+
+By doing this project I learned a lot about decision tree based models. Most of the articles online do not go into great
+detail on how these models are implemented and just focus on the basic idea of them. It was a challenge to figure out how
+to make it work but with my knowledge of data structures from college and the help of ChatGPT explaining the concepts in 
+more detail I was able to implement everything myself. I ended up running into lots of bugs while trying to implement
+gradient boosting and had to add lots of advanced stuff normally found in the actuall gradient boosting libraries to increase 
+my precision and recall. The way both models that are rather simple conceptually can acheive such good results on such a 
+imbalanced dataset is really cool. Also, this project helped cement the idea that models that deal with imbalanced datasets
+can not be judged on accuracy alone, you actually have to see how well it detects the minority class. I didn't mention the 
+actual details of the implementation here because you can see those above in the readme and in the comments in the Python files.
