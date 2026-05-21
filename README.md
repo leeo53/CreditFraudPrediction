@@ -97,3 +97,38 @@ boosting while maintaining a similar precision, ie no more false positives than 
 For Threshold tuning gradient boosting achieved a best threshold of 0.53 with a F1 score of 0.82.
 
 # How to run
+1. Clone this repository 
+
+```bash
+git clone https://github.com/leeo53/CreditFraudPrediction.git
+cd CreditFraudPrediction
+```
+
+2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Download the dataset and put in folder named data in repo. URL: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
+
+```text
+data/creditcard.csv
+```
+
+4. Run the project
+
+```bash
+python src/main.py
+```
+
+5. Optional: Retrain the models
+
+Inside `main.py`, set:
+
+```python
+train_random_forest = True
+train_gradient_boosting = True
+```
+
+Otherwise the program will load the saved `.pkl` model files instead of retraining.
