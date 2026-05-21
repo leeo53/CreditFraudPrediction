@@ -71,7 +71,7 @@ else:
 y_pred_rf = rf_model.predict(X_test)
 
 y_pred_gb, probabilities = gb_model.predict(X_test)
-print(probabilities)
+
 thresholds = np.linspace(0, 1, 101)
 best_f1 = 0
 best_thresh = 0
